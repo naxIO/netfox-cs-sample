@@ -18,6 +18,8 @@ var timer: float = 0.0
 var round_number: int = 0
 var score: Dictionary = { TeamManager.Team.T: 0, TeamManager.Team.CT: 0 }
 var freeze_end_tick: int = -1
+var active_end_tick: int = -1
+var round_end_tick: int = -1
 
 # Tracking alive players per round (synced to clients via RPC)
 var _alive_players: Dictionary = {} # peer_id -> bool
@@ -44,13 +46,14 @@ func start_round():
 
 	round_number += 1
 	freeze_end_tick = NetworkTime.tick + int(freeze_time * float(NetworkTime.tickrate))
+	active_end_tick = freeze_end_tick + int(round_time * float(NetworkTime.tickrate))
+	round_end_tick = -1
 	_mark_all_alive()
 	_change_state(RoundState.FREEZE_TIME, freeze_time)
-	_sync_round_start.rpc(round_number, freeze_end_tick)
+	_sync_round_start.rpc(round_number, freeze_end_tick, active_end_tick)
 
 func _process(delta: float):
-	# All peers count down locally for display (avoids per-frame RPC flood).
-	# Server sent initial duration via _sync_state; clients extrapolate from there.
+	# Local timer countdown for HUD display only
 	if timer > 0:
 		timer -= delta
 
@@ -58,27 +61,29 @@ func _process(delta: float):
 	if not multiplayer.is_server():
 		return
 
-	if timer <= 0 and timer + delta > 0:
-		_on_timer_expired()
+	var current_tick := NetworkTime.tick
 
-func _on_timer_expired():
-	match state:
-		RoundState.FREEZE_TIME:
-			_change_state(RoundState.ACTIVE, round_time)
-
-		RoundState.ACTIVE:
-			# Time ran out — CTs win
-			end_round(TeamManager.Team.CT)
-
-		RoundState.ROUND_END:
-			if _check_match_over():
-				return
-			start_round()
+	# Tick-based transitions for gameplay-critical boundaries
+	if state == RoundState.FREEZE_TIME and current_tick >= freeze_end_tick:
+		_change_state(RoundState.ACTIVE, round_time)
+	elif state == RoundState.ACTIVE and current_tick >= active_end_tick:
+		# Time ran out — CTs win
+		end_round(TeamManager.Team.CT)
+	elif state == RoundState.ROUND_END and timer <= 0:
+		# ROUND_END display duration is cosmetic, frame-based is fine
+		if _check_match_over():
+			return
+		start_round()
 
 func report_kill(victim_id: int, _killer_id: int):
 	if not multiplayer.is_server():
 		return
-	if state != RoundState.ACTIVE:
+	# Tick-based: round must be active (past freeze, before timer expiry, not ended)
+	if round_end_tick >= 0:
+		return
+	if NetworkTime.tick < freeze_end_tick:
+		return
+	if NetworkTime.tick >= active_end_tick:
 		return
 
 	_alive_players[victim_id] = false
@@ -98,9 +103,10 @@ func report_kill(victim_id: int, _killer_id: int):
 func end_round(winner: TeamManager.Team):
 	if not multiplayer.is_server():
 		return
-	if state == RoundState.ROUND_END:
+	if round_end_tick >= 0:
 		return
 
+	round_end_tick = NetworkTime.tick
 	_last_winner = winner
 	score[winner] += 1
 	_sync_score.rpc(score[TeamManager.Team.T], score[TeamManager.Team.CT])
@@ -115,7 +121,7 @@ func sync_to_peer(peer_id: int):
 	## Send full state to a late-joining peer.
 	_sync_state.rpc_id(peer_id, state, timer)
 	_sync_score.rpc_id(peer_id, score[TeamManager.Team.T], score[TeamManager.Team.CT])
-	_sync_round_start.rpc_id(peer_id, round_number, freeze_end_tick)
+	_sync_round_start.rpc_id(peer_id, round_number, freeze_end_tick, active_end_tick)
 	for pid in _alive_players:
 		_sync_player_alive.rpc_id(peer_id, pid, _alive_players[pid])
 	if state == RoundState.ROUND_END and _last_winner != TeamManager.Team.NONE:
@@ -170,9 +176,11 @@ func _sync_score(t_score: int, ct_score: int) -> void:
 	score[TeamManager.Team.CT] = ct_score
 
 @rpc("authority", "call_local", "reliable")
-func _sync_round_start(round_num: int, _freeze_end: int) -> void:
+func _sync_round_start(round_num: int, _freeze_end: int, _active_end: int) -> void:
 	round_number = round_num
 	freeze_end_tick = _freeze_end
+	active_end_tick = _active_end
+	round_end_tick = -1
 	round_started.emit(round_number)
 
 @rpc("authority", "call_local", "reliable")

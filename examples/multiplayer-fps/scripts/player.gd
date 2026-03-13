@@ -120,11 +120,14 @@ func damage():
 		_logger.warning("%s HP now at %s", [name, health])
 
 func can_act() -> bool:
-	## Returns false if the player is dead or in freeze time (used by weapon).
+	## Returns false if the player is dead, frozen, or round has ended.
 	if death_tick >= 0:
 		return false
-	if round_manager and round_manager.freeze_end_tick >= 0 and NetworkTime.tick < round_manager.freeze_end_tick:
-		return false
+	if round_manager:
+		if round_manager.freeze_end_tick >= 0 and NetworkTime.tick < round_manager.freeze_end_tick:
+			return false
+		if round_manager.round_end_tick >= 0:
+			return false
 	return true
 
 func set_spectator():
@@ -142,8 +145,8 @@ func _die():
 	is_dead = true
 	death_tick = NetworkTime.tick
 
-	# Report kill to round manager
-	if round_manager and round_manager.state == RoundManager.RoundState.ACTIVE:
+	# Report kill to round manager (tick-based, not frame-state-based)
+	if round_manager:
 		round_manager.report_kill(get_player_id(), -1)
 
 	_sync_death.rpc()

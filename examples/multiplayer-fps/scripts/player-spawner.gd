@@ -48,8 +48,15 @@ func _handle_new_peer(id: int):
 	_spawn(id)
 	if multiplayer.is_server():
 		team_manager.sync_to_peer(id)
-		# Restart round so new player spawns alive (warmup-style)
-		round_manager.start_round()
+		if avatars.size() <= 2:
+			# First opponent joined — restart round so both spawn alive
+			round_manager.start_round()
+		else:
+			# 3+ players: sync state, spectate until next round
+			round_manager.sync_to_peer(id)
+			var avatar = avatars.get(id)
+			if avatar and avatar.has_method("set_spectator"):
+				avatar.call_deferred("set_spectator")
 
 func _handle_leave(id: int):
 	if not avatars.has(id):
