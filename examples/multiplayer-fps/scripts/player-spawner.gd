@@ -1,11 +1,30 @@
 extends Node
 
 @export var player_scene: PackedScene
-@export var spawn_points: Array[Marker3D] = []
 
+var t_spawn_points: Array[Marker3D] = []
+var ct_spawn_points: Array[Marker3D] = []
+var team_manager: TeamManager
+var round_manager: RoundManager
 var avatars: Dictionary = {}
 
 func _ready():
+	team_manager = $"../TeamManager"
+	round_manager = $"../RoundManager"
+
+	# Discover spawn points from scene containers
+	var scene_root := get_tree().current_scene
+	var t_container := scene_root.get_node_or_null("T Spawns")
+	if t_container:
+		for child in t_container.get_children():
+			if child is Marker3D:
+				t_spawn_points.append(child)
+	var ct_container := scene_root.get_node_or_null("CT Spawns")
+	if ct_container:
+		for child in ct_container.get_children():
+			if child is Marker3D:
+				ct_spawn_points.append(child)
+
 	NetworkEvents.on_client_start.connect(_handle_connected)
 	NetworkEvents.on_server_start.connect(_handle_host)
 	NetworkEvents.on_peer_join.connect(_handle_new_peer)
@@ -13,55 +32,96 @@ func _ready():
 	NetworkEvents.on_client_stop.connect(_handle_stop)
 	NetworkEvents.on_server_stop.connect(_handle_stop)
 
+	if round_manager:
+		round_manager.round_started.connect(_handle_round_start)
+
 func _handle_connected(id: int):
-	# Spawn an avatar for us
 	_spawn(id)
 
 func _handle_host():
-	# Spawn own avatar on host machine
 	_spawn(1)
+	# Auto-start match
+	if round_manager:
+		round_manager.start_match()
 
 func _handle_new_peer(id: int):
-	# Spawn an avatar for new player
 	_spawn(id)
+	# Sync existing match state to late-joining peer
+	if multiplayer.is_server():
+		team_manager.sync_to_peer(id)
+		round_manager.sync_to_peer(id)
 
 func _handle_leave(id: int):
 	if not avatars.has(id):
 		return
-	
+
 	var avatar = avatars[id] as Node
 	avatar.queue_free()
 	avatars.erase(id)
 
 func _handle_stop():
-	# Remove all avatars on game end
 	for avatar in avatars.values():
 		avatar.queue_free()
 	avatars.clear()
 
+func _handle_round_start(_round_number: int):
+	# Respawn all players at their team spawn points
+	for peer_id in avatars:
+		var avatar = avatars[peer_id] as CharacterBody3D
+		if avatar == null:
+			continue
+		var spawn_pos := get_team_spawn_point(peer_id)
+		avatar.round_respawn(spawn_pos)
+
 func _spawn(id: int):
+	# Auto-assign team on server
+	if multiplayer.is_server():
+		team_manager.auto_assign(id)
+
 	var avatar = player_scene.instantiate() as Node
 	avatars[id] = avatar
 	avatar.name += " #%d" % id
 	add_child(avatar)
-	avatar.global_position = get_next_spawn_point(id)
-	
+	avatar.global_position = get_team_spawn_point(id)
+
 	# Avatar is always owned by server
 	avatar.set_multiplayer_authority(1)
 
+	# Pass references
+	if avatar.has_method("setup_references"):
+		avatar.setup_references(team_manager, round_manager)
+
 	print("Spawned avatar %s at %s" % [avatar.name, multiplayer.get_unique_id()])
-	
+
+	# Mid-round joiners spectate until next round (CS-style)
+	if multiplayer.is_server() and round_manager:
+		if round_manager.state == RoundManager.RoundState.ACTIVE or round_manager.state == RoundManager.RoundState.ROUND_END:
+			avatar.call_deferred("set_spectator")
+
 	# Avatar's input object is owned by player
 	var input = avatar.find_child("Input")
 	if input != null:
 		input.set_multiplayer_authority(id)
 		print("Set input(%s) ownership to %s" % [input.name, id])
 
-func get_next_spawn_point(peer_id: int, spawn_idx: int = 0) -> Vector3:
-	# The same data is used to calculate the index on all peers
-	# As a result, spawn points are the same, even without sync
-	var idx := peer_id * 37 + spawn_idx * 19
-	idx = hash(idx)
-	idx = idx % spawn_points.size()
+func get_team_spawn_point(peer_id: int, spawn_idx: int = 0) -> Vector3:
+	var team := team_manager.get_team(peer_id)
+	var points: Array[Marker3D]
 
-	return spawn_points[idx].global_position
+	match team:
+		TeamManager.Team.T:
+			points = t_spawn_points
+		TeamManager.Team.CT:
+			points = ct_spawn_points
+		_:
+			# Fallback: use T spawns
+			points = t_spawn_points
+
+	if points.is_empty():
+		return Vector3.ZERO
+
+	var idx := hash(peer_id * 37 + spawn_idx * 19) % points.size()
+	return points[idx].global_position
+
+func get_next_spawn_point(peer_id: int, spawn_idx: int = 0) -> Vector3:
+	return get_team_spawn_point(peer_id, spawn_idx)

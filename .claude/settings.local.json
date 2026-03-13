@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh repo:*)",
+      "WebFetch(domain:godotengine.org)",
+      "Bash(gh api:*)",
+      "Bash(which npx:*)",
+      "Bash(claude mcp:*)",
+      "mcp__godot__get_godot_status",
+      "mcp__godot__read_scene",
+      "mcp__godot__get_input_map",
+      "mcp__godot__add_node",
+      "mcp__godot__attach_script",
+      "mcp__godot__remove_node",
+      "mcp__godot__configure_input_map",
+      "mcp__godot__get_errors",
+      "mcp__godot__clear_console_log",
+      "mcp__godot__validate_script",
+      "mcp__godot__get_node_properties",
+      "mcp__godot__get_console_log",
+      "Bash(git remote:*)",
+      "Bash(git add:*)"
+    ]
+  }
+}
