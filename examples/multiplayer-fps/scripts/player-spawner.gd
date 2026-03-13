@@ -46,10 +46,10 @@ func _handle_host():
 
 func _handle_new_peer(id: int):
 	_spawn(id)
-	# Sync existing match state to late-joining peer
 	if multiplayer.is_server():
 		team_manager.sync_to_peer(id)
-		round_manager.sync_to_peer(id)
+		# Restart round so new player spawns alive (warmup-style)
+		round_manager.start_round()
 
 func _handle_leave(id: int):
 	if not avatars.has(id):
@@ -65,6 +65,8 @@ func _handle_stop():
 	avatars.clear()
 
 func _handle_round_start(_round_number: int):
+	if not multiplayer.is_server():
+		return
 	# Respawn all players at their team spawn points
 	for peer_id in avatars:
 		var avatar = avatars[peer_id] as CharacterBody3D
@@ -93,16 +95,16 @@ func _spawn(id: int):
 
 	print("Spawned avatar %s at %s" % [avatar.name, multiplayer.get_unique_id()])
 
-	# Mid-round joiners spectate until next round (CS-style)
-	if multiplayer.is_server() and round_manager:
-		if round_manager.state == RoundManager.RoundState.ACTIVE or round_manager.state == RoundManager.RoundState.ROUND_END:
-			avatar.call_deferred("set_spectator")
-
 	# Avatar's input object is owned by player
 	var input = avatar.find_child("Input")
 	if input != null:
 		input.set_multiplayer_authority(id)
 		print("Set input(%s) ownership to %s" % [input.name, id])
+
+	# Notify RollbackSynchronizer about ownership changes (required by netfox docs)
+	var rollback_sync = avatar.find_child("RollbackSynchronizer")
+	if rollback_sync and rollback_sync.has_method("process_settings"):
+		rollback_sync.process_settings()
 
 func get_team_spawn_point(peer_id: int, spawn_idx: int = 0) -> Vector3:
 	var team := team_manager.get_team(peer_id)

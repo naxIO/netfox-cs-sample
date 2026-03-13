@@ -17,6 +17,7 @@ var health: int = 100
 var death_tick: int = -1
 var respawn_position: Vector3
 var did_respawn := false
+var respawn_tick: int = -1
 var deaths := 0
 var is_dead := false
 
@@ -49,6 +50,14 @@ func _after_tick_loop():
 		tick_interpolator.teleport()
 
 func _rollback_tick(delta: float, tick: int, is_fresh: bool) -> void:
+	# Handle round respawn teleport inside rollback for proper integration
+	if respawn_tick >= 0 and tick == respawn_tick:
+		global_position = respawn_position
+		velocity = Vector3.ZERO
+		did_respawn = true
+	else:
+		did_respawn = false
+
 	# Use death_tick (replicated via MultiplayerSynchronizer) for rollback-safe
 	# dead check. During resimulation, tick < death_tick = alive, tick >= death_tick = dead.
 	if death_tick >= 0 and tick >= death_tick:
@@ -140,17 +149,19 @@ func _die():
 	_sync_death.rpc()
 
 func round_respawn(spawn_pos: Vector3):
-	# Called by spawner at round start
+	# Called by spawner at round start (server only)
 	is_dead = false
 	health = 100
 	deaths = 0
 	death_tick = -1
+	respawn_position = spawn_pos
+	respawn_tick = NetworkTime.tick
 	global_position = spawn_pos
 	velocity = Vector3.ZERO
+	did_respawn = true
 	_show_player()
 
-	if is_multiplayer_authority():
-		_sync_round_respawn.rpc()
+	_sync_round_respawn.rpc(spawn_pos, respawn_tick)
 
 func _hide_player():
 	# Hide visuals but keep node alive for spectating
@@ -180,6 +191,13 @@ func _sync_death() -> void:
 	_hide_player()
 
 @rpc("authority", "call_local", "reliable")
-func _sync_round_respawn() -> void:
+func _sync_round_respawn(spawn_pos: Vector3, _respawn_tick: int) -> void:
 	is_dead = false
+	health = 100
+	death_tick = -1
+	respawn_position = spawn_pos
+	respawn_tick = _respawn_tick
+	global_position = spawn_pos
+	velocity = Vector3.ZERO
+	did_respawn = true
 	_show_player()
