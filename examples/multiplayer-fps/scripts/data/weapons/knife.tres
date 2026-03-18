@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="WeaponData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://examples/multiplayer-fps/scripts/data/weapon_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+weapon_id = 1
+weapon_name = "Knife"
+slot = 0
+damage = 50
+fire_rate = 0.4
+fire_mode = 2
+magazine_size = 0
+reserve_size = 0
+move_speed = 6.0
+recoil_per_shot = 0.0
+recoil_recovery = 0.0
+kill_reward = 1500
+armor_penetration = 1.0
+price = 0
+team = -1
+max_distance = 2.0
+reload_time = 0.0

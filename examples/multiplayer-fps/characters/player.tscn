@@ -3,7 +3,7 @@
 [ext_resource type="Script" path="res://addons/netfox/rollback/rollback-synchronizer.gd" id="1_g0p7o"]
 [ext_resource type="Script" path="res://examples/multiplayer-fps/scripts/player.gd" id="1_mk8qw"]
 [ext_resource type="Script" path="res://addons/netfox/tick-interpolator.gd" id="2_3rc26"]
-[ext_resource type="Script" path="res://examples/multiplayer-fps/scripts/player-weapon.gd" id="3_4j0gy"]
+[ext_resource type="Script" path="res://examples/multiplayer-fps/scripts/weapon_manager.gd" id="3_4j0gy"]
 [ext_resource type="AudioStream" uid="uid://cope814m1d7p6" path="res://examples/multiplayer-fps/sounds/fire.mp3" id="5_14ltm"]
 [ext_resource type="Script" path="res://examples/multiplayer-fps/scripts/bullethole.gd" id="6_f1qm8"]
 [ext_resource type="Script" path="res://examples/multiplayer-fps/scripts/ui/projection3d.gd" id="6_sv41w"]
@@ -69,20 +69,20 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.705698, 0)
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.25)
 mesh = SubResource("BoxMesh_qmeb2")
 
-[node name="PlayerFPSWeapon" type="Node3D" parent="Head"]
+[node name="WeaponManager" type="Node3D" parent="Head"]
 script = ExtResource("3_4j0gy")
 
-[node name="AudioStreamPlayer3D" type="AudioStreamPlayer3D" parent="Head/PlayerFPSWeapon"]
+[node name="AudioStreamPlayer3D" type="AudioStreamPlayer3D" parent="Head/WeaponManager"]
 stream = ExtResource("5_14ltm")
 
-[node name="Fire Action" type="Node" parent="Head/PlayerFPSWeapon"]
+[node name="Fire Action" type="Node" parent="Head/WeaponManager"]
 script = ExtResource("9_ra1gd")
 
-[node name="BulletHole" type="Node3D" parent="Head/PlayerFPSWeapon"]
+[node name="BulletHole" type="Node3D" parent="Head/WeaponManager"]
 script = ExtResource("6_f1qm8")
 material = SubResource("StandardMaterial3D_faajq")
 
-[node name="TinyGun" type="MeshInstance3D" parent="Head/PlayerFPSWeapon"]
+[node name="TinyGun" type="MeshInstance3D" parent="Head/WeaponManager"]
 transform = Transform3D(0.15, 0, 0, 0, 0.15, 0, 0, 0, 0.15, 0.09, -0.18, -0.3)
 mesh = SubResource("BoxMesh_0vqha")
 
@@ -127,8 +127,8 @@ mesh = SubResource("CapsuleMesh_xnks4")
 unique_name_in_owner = true
 script = ExtResource("1_g0p7o")
 root = NodePath("..")
-state_properties = Array[String]([":transform", ":velocity", ":did_respawn", ":health", ":death_tick", ":deaths", "Head:transform", "Head/PlayerFPSWeapon:last_fire"])
-input_properties = Array[String](["Input:movement", "Input:jump", "Input:fire", "Input:look_angle"])
+state_properties = Array[String]([":transform", ":velocity", ":did_respawn", ":health", ":death_tick", ":deaths", ":last_damage_attacker_id", ":last_damage_weapon_id", ":last_damage_tick", ":armor", ":has_defuse_kit", "Head:transform", "Head/WeaponManager:inventory", "Head/WeaponManager:active_slot", "Head/WeaponManager:ammo", "Head/WeaponManager:reserve", "Head/WeaponManager:reload_start_tick", "Head/WeaponManager:last_fire_by_slot", "Head/WeaponManager:recoil_accumulator", "Head/WeaponManager:grenade_counts", "Head/WeaponManager:active_grenade_type"])
+input_properties = Array[String](["Input:movement", "Input:jump", "Input:look_angle", "Input:fire_held", "Input:fire_pressed", "Input:reload_pressed", "Input:next_weapon", "Input:prev_weapon", "Input:slot_1", "Input:slot_2", "Input:slot_3", "Input:slot_4", "Input:use_held"])
 
 [node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="."]
 replication_config = SubResource("SceneReplicationConfig_70css")

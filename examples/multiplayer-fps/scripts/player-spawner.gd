@@ -6,11 +6,15 @@ var t_spawn_points: Array[Marker3D] = []
 var ct_spawn_points: Array[Marker3D] = []
 var team_manager: TeamManager
 var round_manager: RoundManager
+var economy_manager: EconomyManager
+var bomb: Bomb
 var avatars: Dictionary = {}
 
 func _ready():
 	team_manager = $"../TeamManager"
 	round_manager = $"../RoundManager"
+	economy_manager = $"../EconomyManager"
+	bomb = get_tree().current_scene.get_node_or_null("Network/Bomb")
 
 	# Discover spawn points from scene containers
 	var scene_root := get_tree().current_scene
@@ -48,6 +52,10 @@ func _handle_new_peer(id: int):
 	_spawn(id)
 	if multiplayer.is_server():
 		team_manager.sync_to_peer(id)
+		if economy_manager:
+			economy_manager.sync_to_peer(id)
+		if bomb:
+			bomb.sync_to_peer(id)
 		if avatars.size() <= 2:
 			# First opponent joined — restart round so both spawn alive
 			round_manager.start_round()
@@ -65,6 +73,8 @@ func _handle_leave(id: int):
 	var avatar = avatars[id] as Node
 	avatar.queue_free()
 	avatars.erase(id)
+	if economy_manager:
+		economy_manager.remove_player(id)
 
 func _handle_stop():
 	for avatar in avatars.values():
@@ -79,8 +89,17 @@ func _handle_round_start(_round_number: int):
 		var avatar = avatars[peer_id] as CharacterBody3D
 		if avatar == null:
 			continue
+		# Fresh spawns (_has_played_round=false) always get default loadout
+		var survived: bool = not avatar.is_dead and avatar._has_played_round
 		var spawn_pos := get_team_spawn_point(peer_id)
-		avatar.round_respawn(spawn_pos)
+		avatar.round_respawn(spawn_pos, survived)
+
+	# Assign bomb to a random T player
+	if bomb:
+		var t_members := team_manager.get_team_members(TeamManager.Team.T)
+		if not t_members.is_empty():
+			var idx := hash(_round_number * 31) % t_members.size()
+			bomb.assign_to_player(t_members[idx])
 
 func _spawn(id: int):
 	# Auto-assign team on server
@@ -100,6 +119,10 @@ func _spawn(id: int):
 	if avatar.has_method("setup_references"):
 		avatar.setup_references(team_manager, round_manager)
 
+	# Init economy
+	if multiplayer.is_server() and economy_manager:
+		economy_manager.init_player(id)
+
 	print("Spawned avatar %s at %s" % [avatar.name, multiplayer.get_unique_id()])
 
 	# Avatar's input object is owned by player
@@ -108,7 +131,7 @@ func _spawn(id: int):
 		input.set_multiplayer_authority(id)
 		print("Set input(%s) ownership to %s" % [input.name, id])
 
-	# Notify RollbackSynchronizer about ownership changes (required by netfox docs)
+	# Notify RollbackSynchronizer about ownership changes
 	var rollback_sync = avatar.find_child("RollbackSynchronizer")
 	if rollback_sync and rollback_sync.has_method("process_settings"):
 		rollback_sync.process_settings()

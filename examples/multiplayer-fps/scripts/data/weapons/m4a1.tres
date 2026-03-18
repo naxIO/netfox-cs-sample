@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="WeaponData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://examples/multiplayer-fps/scripts/data/weapon_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+weapon_id = 5
+weapon_name = "M4A1"
+slot = 2
+damage = 33
+fire_rate = 0.09
+fire_mode = 1
+magazine_size = 30
+reserve_size = 90
+move_speed = 4.7
+recoil_per_shot = 2.0
+recoil_recovery = 10.0
+kill_reward = 300
+armor_penetration = 0.7
+price = 3100
+team = 1
+max_distance = 1000.0
+reload_time = 3.1

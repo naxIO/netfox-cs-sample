@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="WeaponData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://examples/multiplayer-fps/scripts/data/weapon_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+weapon_id = 2
+weapon_name = "Glock"
+slot = 1
+damage = 25
+fire_rate = 0.15
+fire_mode = 0
+magazine_size = 20
+reserve_size = 120
+move_speed = 5.5
+recoil_per_shot = 1.5
+recoil_recovery = 10.0
+kill_reward = 300
+armor_penetration = 0.47
+price = 400
+team = 0
+max_distance = 1000.0
+reload_time = 2.2

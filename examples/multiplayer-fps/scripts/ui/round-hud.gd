@@ -12,11 +12,16 @@ var team_manager: TeamManager
 var scoreboard_vbox: VBoxContainer
 var _scoreboard_rebuild_timer := 0.0
 
+# Ammo and money display
+var ammo_label: Label
+var money_label: Label
+
 const COLOR_T := Color("#FFCC00")
 const COLOR_CT := Color("#99CCFF")
 const COLOR_DEAD := Color("#884444")
 const COLOR_GREEN := Color("#00FF00")
 const COLOR_HEADER := Color("#AAAAAA")
+const COLOR_AMMO := Color("#FFDD44")
 
 func _ready():
 	var scene_root := get_tree().current_scene
@@ -53,7 +58,7 @@ func _setup_styles():
 	state_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	state_label.mouse_filter = MOUSE_FILTER_IGNORE
 
-	# Scoreboard panel — CS 1.6 dark background
+	# Scoreboard panel
 	var panel_style := StyleBoxFlat.new()
 	panel_style.bg_color = Color(0.05, 0.05, 0.1, 0.88)
 	panel_style.border_color = Color(0.4, 0.4, 0.4, 0.6)
@@ -62,7 +67,6 @@ func _setup_styles():
 	panel_style.set_content_margin_all(12)
 	scoreboard_panel.add_theme_stylebox_override("panel", panel_style)
 
-	# Remove old Label, replace with VBoxContainer
 	var old_label := scoreboard_panel.get_node_or_null("Label")
 	if old_label:
 		old_label.queue_free()
@@ -71,6 +75,24 @@ func _setup_styles():
 	scoreboard_vbox.name = "ScoreboardVBox"
 	scoreboard_vbox.mouse_filter = MOUSE_FILTER_IGNORE
 	scoreboard_panel.add_child(scoreboard_vbox)
+
+	# Ammo label
+	ammo_label = Label.new()
+	ammo_label.name = "AmmoLabel"
+	ammo_label.add_theme_font_size_override("font_size", 22)
+	ammo_label.add_theme_color_override("font_color", COLOR_AMMO)
+	ammo_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	ammo_label.mouse_filter = MOUSE_FILTER_IGNORE
+	add_child(ammo_label)
+
+	# Money label
+	money_label = Label.new()
+	money_label.name = "MoneyLabel"
+	money_label.add_theme_font_size_override("font_size", 18)
+	money_label.add_theme_color_override("font_color", Color("#00FF00"))
+	money_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	money_label.mouse_filter = MOUSE_FILTER_IGNORE
+	add_child(money_label)
 
 func _process(_delta: float):
 	if round_manager == null:
@@ -91,6 +113,14 @@ func _process(_delta: float):
 	scoreboard_panel.size = Vector2(560, 420)
 	scoreboard_panel.position = Vector2(vp.x / 2.0 - 280, vp.y / 2.0 - 210)
 
+	# Ammo label — bottom right
+	ammo_label.size = Vector2(200, 30)
+	ammo_label.position = Vector2(vp.x - 220, vp.y - 40)
+
+	# Money label — bottom left
+	money_label.size = Vector2(200, 28)
+	money_label.position = Vector2(20, vp.y - 40)
+
 	# Timer content
 	var time_left: float = maxf(0.0, round_manager.timer)
 	var minutes := int(time_left) / 60
@@ -107,7 +137,11 @@ func _process(_delta: float):
 	var ct_score := int(round_manager.score.get(TeamManager.Team.CT, 0))
 	score_label.text = "T  %d  :  %d  CT" % [t_score, ct_score]
 
-	# Scoreboard (Tab) — throttle rebuilds to max 2/sec to avoid UI churn
+	# Ammo + money display
+	_update_ammo_display()
+	_update_money_display()
+
+	# Scoreboard (Tab)
 	if Input.is_action_pressed("scoreboard"):
 		_scoreboard_rebuild_timer -= _delta
 		if _scoreboard_rebuild_timer <= 0:
@@ -117,6 +151,43 @@ func _process(_delta: float):
 	else:
 		scoreboard_panel.hide()
 		_scoreboard_rebuild_timer = 0.0
+
+func _update_ammo_display():
+	var local_player: CharacterBody3D = _find_local_player()
+	if local_player == null or local_player.weapon_manager == null:
+		ammo_label.text = ""
+		return
+
+	var wm: WeaponManager = local_player.weapon_manager
+	var weapon := wm.get_active_weapon()
+	if weapon == null:
+		ammo_label.text = ""
+		return
+
+	if weapon.fire_mode == WeaponData.FireMode.MELEE:
+		ammo_label.text = weapon.weapon_name
+	else:
+		ammo_label.text = "%s  %d / %d" % [weapon.weapon_name, wm.ammo[wm.active_slot], wm.reserve[wm.active_slot]]
+
+func _update_money_display():
+	var economy := get_tree().current_scene.get_node_or_null("Network/EconomyManager") as EconomyManager
+	if economy == null:
+		money_label.text = ""
+		return
+	var local_id := multiplayer.get_unique_id()
+	var money := economy.get_money(local_id)
+	money_label.text = "$%d" % money
+
+func _find_local_player() -> CharacterBody3D:
+	var players_container := get_tree().current_scene.get_node_or_null("Network/Player Spawner")
+	if players_container == null:
+		return null
+	for child in players_container.get_children():
+		if child is CharacterBody3D:
+			var input_node := child.get_node_or_null("Input")
+			if input_node and input_node.is_multiplayer_authority():
+				return child
+	return null
 
 func _on_state_changed(new_state: RoundManager.RoundState):
 	match new_state:
@@ -139,13 +210,12 @@ func _on_round_ended(winner: TeamManager.Team):
 	state_label.add_theme_color_override("font_color", color)
 	state_label.show()
 
-# --- Scoreboard building with Control nodes ---
+# --- Scoreboard building ---
 
 func _rebuild_scoreboard():
 	if team_manager == null or scoreboard_vbox == null:
 		return
 
-	# Clear previous content
 	for child in scoreboard_vbox.get_children():
 		child.queue_free()
 
@@ -154,19 +224,14 @@ func _rebuild_scoreboard():
 	var t_score := int(round_manager.score.get(TeamManager.Team.T, 0))
 	var ct_score := int(round_manager.score.get(TeamManager.Team.CT, 0))
 
-	# Title
 	_add_label_centered("Counter-Strike", Color.WHITE, 20)
 	_add_label_centered("Round %d" % round_manager.round_number, Color.GRAY, 12)
 	_add_spacer(8)
 
-	# Column headers
 	_add_row(["Name", "Score", "Deaths", "Latency"], COLOR_HEADER, 13)
 	_add_separator()
 
-	# T header
 	_add_team_header("Terrorists", t_members.size(), t_score, COLOR_T)
-
-	# T players
 	for peer_id in t_members:
 		var alive := round_manager.is_player_alive(peer_id)
 		var c := COLOR_T if alive else COLOR_DEAD
@@ -176,10 +241,7 @@ func _rebuild_scoreboard():
 	_add_spacer(4)
 	_add_separator()
 
-	# CT header
 	_add_team_header("Counter-Terrorists", ct_members.size(), ct_score, COLOR_CT)
-
-	# CT players
 	for peer_id in ct_members:
 		var alive := round_manager.is_player_alive(peer_id)
 		var c := COLOR_CT if alive else COLOR_DEAD
@@ -221,7 +283,6 @@ func _add_row(columns: Array, color: Color, font_size: int):
 	var hbox := HBoxContainer.new()
 	hbox.mouse_filter = MOUSE_FILTER_IGNORE
 
-	# Column widths: Name=5, Score=2, Deaths=2, Latency=2
 	var ratios := [5, 2, 2, 2]
 
 	for i in columns.size():

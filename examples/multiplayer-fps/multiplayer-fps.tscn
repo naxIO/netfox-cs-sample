@@ -7,6 +7,11 @@
 [ext_resource type="Script" uid="uid://c3eokqjyc0bee" path="res://examples/shared/scripts/simple-time-display.gd" id="4_c2ddp"]
 [ext_resource type="Script" uid="uid://c8adu0soolfyq" path="res://examples/multiplayer-fps/scripts/round-manager.gd" id="4_t3cki"]
 [ext_resource type="Script" uid="uid://1wur66am5ly8" path="res://examples/multiplayer-fps/scripts/ui/round-hud.gd" id="7_7swc0"]
+[ext_resource type="Script" path="res://examples/multiplayer-fps/scripts/economy_manager.gd" id="8_econ"]
+[ext_resource type="Script" path="res://examples/multiplayer-fps/scripts/ui/buy_menu.gd" id="9_buym"]
+[ext_resource type="Script" path="res://examples/multiplayer-fps/scripts/bomb.gd" id="10_bomb"]
+[ext_resource type="Script" path="res://examples/multiplayer-fps/scripts/bombsite.gd" id="11_bsite"]
+[ext_resource type="Script" path="res://examples/multiplayer-fps/scripts/ui/bomb_hud.gd" id="12_bhud"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_m76yx"]
 
@@ -59,6 +64,12 @@ script = ExtResource("3_573tb")
 
 [node name="RoundManager" type="Node" parent="Network" unique_id=2022146235]
 script = ExtResource("4_t3cki")
+
+[node name="EconomyManager" type="Node" parent="Network"]
+script = ExtResource("8_econ")
+
+[node name="Bomb" type="Node" parent="Network"]
+script = ExtResource("10_bomb")
 
 [node name="Players" type="Node" parent="." unique_id=1152473522]
 
@@ -120,6 +131,24 @@ layout_mode = 0
 [node name="Label" type="Label" parent="UI/RoundHUD/ScoreboardPanel" unique_id=435714799]
 layout_mode = 2
 
+[node name="BuyMenu" type="Control" parent="UI"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("9_buym")
+
+[node name="BombHUD" type="Control" parent="UI"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("12_bhud")
+
 [node name="Map" type="Node" parent="." unique_id=439361680]
 
 [node name="StaticBody3D" type="StaticBody3D" parent="Map" unique_id=442986938]
@@ -152,3 +181,17 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 11, 1, 2)
 
 [node name="Marker3D3" type="Marker3D" parent="CT Spawns" unique_id=181942226]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 11, 1, -2)
+
+[node name="Bombsite A" type="Area3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 0, 5)
+script = ExtResource("11_bsite")
+site_name = "A"
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Bombsite A"]
+
+[node name="Bombsite B" type="Area3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 0, -5)
+script = ExtResource("11_bsite")
+site_name = "B"
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Bombsite B"]

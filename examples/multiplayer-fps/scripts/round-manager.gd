@@ -6,6 +6,7 @@ enum RoundState { WARMUP, FREEZE_TIME, ACTIVE, ROUND_END }
 signal round_state_changed(new_state: RoundState)
 signal round_started(round_number: int)
 signal round_ended(winner: TeamManager.Team)
+signal player_killed(victim_id: int, killer_id: int, weapon_id: int, kill_tick: int)
 
 @export var freeze_time: float = 5.0
 @export var round_time: float = 115.0
@@ -26,9 +27,11 @@ var _alive_players: Dictionary = {} # peer_id -> bool
 var _last_winner: TeamManager.Team = TeamManager.Team.NONE
 
 var team_manager: TeamManager
+var bomb: Bomb
 
 func _ready():
 	team_manager = $"../TeamManager"
+	bomb = get_tree().current_scene.get_node_or_null("Network/Bomb")
 	set_process(false)
 	NetworkEvents.on_peer_leave.connect(_handle_peer_leave)
 
@@ -67,21 +70,20 @@ func _process(delta: float):
 	if state == RoundState.FREEZE_TIME and current_tick >= freeze_end_tick:
 		_change_state(RoundState.ACTIVE, round_time)
 	elif state == RoundState.ACTIVE and current_tick >= active_end_tick:
-		# Time ran out — CTs win
-		end_round(TeamManager.Team.CT)
+		# Time ran out — CTs win (only if bomb not planted)
+		if bomb and (bomb.state == Bomb.BombState.PLANTED or bomb.state == Bomb.BombState.DEFUSING):
+			pass  # Round continues — bomb is ticking
+		else:
+			end_round(TeamManager.Team.CT)
 	elif state == RoundState.ROUND_END and timer <= 0:
-		# ROUND_END display duration is cosmetic, frame-based is fine
 		if _check_match_over():
 			return
 		start_round()
 
-func report_kill(victim_id: int, _killer_id: int, kill_tick: int = -1):
+func report_kill(victim_id: int, killer_id: int, weapon_id: int, kill_tick: int = -1):
 	if not multiplayer.is_server():
 		return
-	# Use the actual tick the kill happened on, not the current tick.
-	# During catch-up frames, NetworkTime.tick may have advanced past boundaries.
 	var check_tick := kill_tick if kill_tick >= 0 else NetworkTime.tick
-	# Kill must be during active phase (past freeze, before round end, before timer expiry)
 	if round_end_tick >= 0 and check_tick > round_end_tick:
 		return
 	if check_tick < freeze_end_tick:
@@ -92,16 +94,22 @@ func report_kill(victim_id: int, _killer_id: int, kill_tick: int = -1):
 	_alive_players[victim_id] = false
 	_sync_player_alive.rpc(victim_id, false)
 
+	# Emit kill event for economy, stats, kill-feed
+	player_killed.emit(victim_id, killer_id, weapon_id, check_tick)
+
 	# Check if a whole team is eliminated
 	var t_alive := _count_alive(TeamManager.Team.T)
 	var ct_alive := _count_alive(TeamManager.Team.CT)
 
-	if t_alive == 0 and ct_alive == 0:
-		end_round(TeamManager.Team.CT)
-	elif t_alive == 0:
-		end_round(TeamManager.Team.CT)
-	elif ct_alive == 0:
+	var bomb_planted := bomb and (bomb.state == Bomb.BombState.PLANTED or bomb.state == Bomb.BombState.DEFUSING)
+
+	if ct_alive == 0:
 		end_round(TeamManager.Team.T)
+	elif t_alive == 0 and not bomb_planted:
+		# All Ts dead + bomb NOT planted → CT win
+		end_round(TeamManager.Team.CT)
+	elif t_alive == 0 and bomb_planted:
+		pass  # Round continues — bomb is planted
 
 func end_round(winner: TeamManager.Team):
 	if not multiplayer.is_server():
@@ -121,7 +129,6 @@ func is_player_alive(peer_id: int) -> bool:
 	return _alive_players.get(peer_id, false)
 
 func sync_to_peer(peer_id: int):
-	## Send full state to a late-joining peer.
 	_sync_state.rpc_id(peer_id, state, timer)
 	_sync_score.rpc_id(peer_id, score[TeamManager.Team.T], score[TeamManager.Team.CT])
 	_sync_round_start.rpc_id(peer_id, round_number, freeze_end_tick, active_end_tick)
@@ -142,7 +149,6 @@ func _mark_all_alive():
 	for peer_id in team_manager.assignments:
 		if team_manager.get_team(peer_id) != TeamManager.Team.NONE:
 			_alive_players[peer_id] = true
-	# Broadcast alive states to all clients
 	for pid in _alive_players:
 		_sync_player_alive.rpc(pid, _alive_players[pid])
 
@@ -158,7 +164,6 @@ func _handle_peer_leave(peer_id: int) -> void:
 
 func _check_match_over() -> bool:
 	if score[TeamManager.Team.T] >= rounds_to_win or score[TeamManager.Team.CT] >= rounds_to_win:
-		# TODO: Match end handling
 		return true
 	if round_number >= max_rounds:
 		return true
