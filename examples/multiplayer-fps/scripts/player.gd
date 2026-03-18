@@ -26,6 +26,15 @@ var _ackd_deaths := 0
 var _was_hit := false
 var _needs_teleport := false
 
+# Frame-rate local camera (bypasses TickInterpolator for instant mouse response)
+var _is_local := false
+var _sim_transform: Transform3D
+var _sim_head_transform: Transform3D
+var _sim_yaw: float
+var _sim_pitch: float
+var _lerp_from_pos: Vector3
+var _lerp_to_pos: Vector3
+
 var team_manager: TeamManager
 var round_manager: RoundManager
 
@@ -40,18 +49,50 @@ func setup_references(tm: TeamManager, rm: RoundManager):
 	team_manager = tm
 	round_manager = rm
 
+func _setup_local_camera():
+	_is_local = true
+	tick_interpolator._disconnect_signals()
+	tick_interpolator.enabled = false
+	_sim_transform = global_transform
+	_sim_head_transform = head.transform
+	_sim_yaw = rotation.y
+	_sim_pitch = head.rotation.x
+	_lerp_from_pos = global_position
+	_lerp_to_pos = global_position
+
 func _before_tick_loop():
 	_ackd_deaths = deaths
 	_needs_teleport = false
+	if _is_local:
+		# Restore authoritative simulation state before rollback loop
+		global_transform = _sim_transform
+		head.transform = _sim_head_transform
 
 func _after_tick_loop():
+	# Save simulation state for local player's frame-rate rendering
+	if _is_local:
+		_sim_transform = global_transform
+		_sim_head_transform = head.transform
+		_sim_yaw = rotation.y
+		_sim_pitch = head.rotation.x
+		_lerp_from_pos = _lerp_to_pos
+		_lerp_to_pos = global_position
+
 	# Teleport if any respawn happened during this tick loop (catch-up safe)
 	if _needs_teleport:
-		tick_interpolator.teleport()
+		if _is_local:
+			_lerp_from_pos = global_position
+			_lerp_to_pos = global_position
+		else:
+			tick_interpolator.teleport()
 
 	# Death detected during rollback loop
 	if deaths > _ackd_deaths:
-		tick_interpolator.teleport()
+		if _is_local:
+			_lerp_from_pos = global_position
+			_lerp_to_pos = global_position
+		else:
+			tick_interpolator.teleport()
 		is_dead = true
 		$DieSFX.play()
 		_hide_player()
@@ -66,6 +107,23 @@ func _after_tick_loop():
 	if _was_hit:
 		$HitSFX.play()
 		_was_hit = false
+
+func _process(_delta: float):
+	if not _is_local:
+		if input.is_multiplayer_authority():
+			_setup_local_camera()
+		else:
+			return
+
+	# Smooth position interpolation between ticks
+	var f := NetworkTime.tick_factor
+	global_position = _lerp_from_pos.lerp(_lerp_to_pos, f)
+
+	# Frame-rate mouse look: last tick's rotation + pending mouse delta
+	rotation.y = _sim_yaw + (-input.mouse_rotation.y)
+	head.rotation.x = clamp(_sim_pitch + (-input.mouse_rotation.x), -1.57, 1.57)
+	head.rotation.y = 0
+	head.rotation.z = 0
 
 func _rollback_tick(delta: float, tick: int, is_fresh: bool) -> void:
 	# Handle round respawn teleport inside rollback for proper integration
@@ -205,12 +263,18 @@ func _sync_death(server_death_tick: int) -> void:
 	is_dead = true
 	death_tick = server_death_tick
 	_hide_player()
+	if _is_local:
+		_lerp_from_pos = global_position
+		_lerp_to_pos = global_position
 
 @rpc("authority", "call_local", "reliable")
 func _sync_spectator(server_death_tick: int) -> void:
 	is_dead = true
 	death_tick = server_death_tick
 	_hide_player()
+	if _is_local:
+		_lerp_from_pos = global_position
+		_lerp_to_pos = global_position
 
 @rpc("authority", "call_local", "reliable")
 func _sync_round_respawn(spawn_pos: Vector3, _respawn_tick: int) -> void:
@@ -225,3 +289,10 @@ func _sync_round_respawn(spawn_pos: Vector3, _respawn_tick: int) -> void:
 	did_respawn = true
 	_ackd_deaths = 0
 	_show_player()
+	if _is_local:
+		_sim_transform = global_transform
+		_sim_head_transform = head.transform
+		_sim_yaw = rotation.y
+		_sim_pitch = head.rotation.x
+		_lerp_from_pos = spawn_pos
+		_lerp_to_pos = spawn_pos
