@@ -86,10 +86,9 @@ func host():
 	
 	role = Role.HOST
 	connect_ui.hide()
-	# NOTE: This is not needed when using NetworkEvents
-	# However, this script also runs in multiplayer-simple where NetworkEvents
-	# are assumed to be absent, hence starting NetworkTime manually
-	NetworkTime.start()
+	# Only start manually if NetworkEvents is not handling it (e.g. multiplayer-simple)
+	if not NetworkEvents.enabled:
+		NetworkTime.start()
 
 func join():
 	role = Role.CLIENT
@@ -161,10 +160,9 @@ func _handle_connect(address: String, port: int) -> Error:
 			return ERR_CANT_CONNECT
 		
 		connect_ui.hide()
-		# NOTE: This is not needed when using NetworkEvents
-		# However, this script also runs in multiplayer-simple where NetworkEvents
-		# are assumed to be absent, hence starting NetworkTime manually
-		NetworkTime.start()
+		# Only start manually if NetworkEvents is not handling it (e.g. multiplayer-simple)
+		if not NetworkEvents.enabled:
+			NetworkTime.start()
 
 	if role == Role.HOST:
 		# We should already have the connection configured, only thing to do is a handshake

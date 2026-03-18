@@ -75,15 +75,18 @@ func _process(delta: float):
 			return
 		start_round()
 
-func report_kill(victim_id: int, _killer_id: int):
+func report_kill(victim_id: int, _killer_id: int, kill_tick: int = -1):
 	if not multiplayer.is_server():
 		return
-	# Tick-based: round must be active (past freeze, before timer expiry, not ended)
-	if round_end_tick >= 0:
+	# Use the actual tick the kill happened on, not the current tick.
+	# During catch-up frames, NetworkTime.tick may have advanced past boundaries.
+	var check_tick := kill_tick if kill_tick >= 0 else NetworkTime.tick
+	# Kill must be during active phase (past freeze, before round end, before timer expiry)
+	if round_end_tick >= 0 and check_tick > round_end_tick:
 		return
-	if NetworkTime.tick < freeze_end_tick:
+	if check_tick < freeze_end_tick:
 		return
-	if NetworkTime.tick >= active_end_tick:
+	if check_tick >= active_end_tick:
 		return
 
 	_alive_players[victim_id] = false
@@ -110,7 +113,7 @@ func end_round(winner: TeamManager.Team):
 	_last_winner = winner
 	score[winner] += 1
 	_sync_score.rpc(score[TeamManager.Team.T], score[TeamManager.Team.CT])
-	_sync_round_end.rpc(winner)
+	_sync_round_end.rpc(winner, round_end_tick)
 	_change_state(RoundState.ROUND_END, round_end_time)
 	round_ended.emit(winner)
 
@@ -125,7 +128,7 @@ func sync_to_peer(peer_id: int):
 	for pid in _alive_players:
 		_sync_player_alive.rpc_id(peer_id, pid, _alive_players[pid])
 	if state == RoundState.ROUND_END and _last_winner != TeamManager.Team.NONE:
-		_sync_round_end.rpc_id(peer_id, _last_winner)
+		_sync_round_end.rpc_id(peer_id, _last_winner, round_end_tick)
 
 func _count_alive(team: TeamManager.Team) -> int:
 	var count := 0
@@ -184,7 +187,8 @@ func _sync_round_start(round_num: int, _freeze_end: int, _active_end: int) -> vo
 	round_started.emit(round_number)
 
 @rpc("authority", "call_local", "reliable")
-func _sync_round_end(winner: int) -> void:
+func _sync_round_end(winner: int, _round_end_tick: int) -> void:
+	round_end_tick = _round_end_tick
 	round_ended.emit(winner as TeamManager.Team)
 
 @rpc("authority", "call_local", "reliable")

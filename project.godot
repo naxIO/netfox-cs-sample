@@ -44,7 +44,6 @@ NetworkCommandServer="*res://addons/netfox/servers/network-command-server.gd"
 
 window/size/viewport_width=1024
 window/size/viewport_height=768
-window/size/mode=3
 window/vsync/vsync_mode=0
 
 [editor_plugins]
@@ -139,7 +138,7 @@ scoreboard={
 [netfox]
 
 general/clear_settings=false
-time/tickrate=24
+time/tickrate=64
 extras/auto_tile_windows=true
 autoconnect/enabled=false
 

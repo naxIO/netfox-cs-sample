@@ -43,10 +43,9 @@ func host():
 	
 	connect_ui.hide()
 	
-	# NOTE: This is not needed when using NetworkEvents
-	# However, this script also runs in multiplayer-simple where NetworkEvents
-	# are assumed to be absent, hence starting NetworkTime manually
-	NetworkTime.start()
+	# Only start manually if NetworkEvents is not handling it (e.g. multiplayer-simple)
+	if not NetworkEvents.enabled:
+		NetworkTime.start()
 
 func join():
 	var host = _parse_input()
@@ -79,10 +78,9 @@ func join():
 	print("Client started")
 	connect_ui.hide()
 	
-	# NOTE: This is not needed when using NetworkEvents
-	# However, this script also runs in multiplayer-simple where NetworkEvents
-	# are assumed to be absent, hence starting NetworkTime manually
-	NetworkTime.start()
+	# Only start manually if NetworkEvents is not handling it (e.g. multiplayer-simple)
+	if not NetworkEvents.enabled:
+		NetworkTime.start()
 
 func _enter_tree():
 	# Hide and show UI as appropriate

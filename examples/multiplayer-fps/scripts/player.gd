@@ -21,6 +21,11 @@ var respawn_tick: int = -1
 var deaths := 0
 var is_dead := false
 
+# Track deaths across tick loops to detect state changes (rollback-fps pattern)
+var _ackd_deaths := 0
+var _was_hit := false
+var _needs_teleport := false
+
 var team_manager: TeamManager
 var round_manager: RoundManager
 
@@ -28,26 +33,39 @@ func _ready():
 	display_name.text = name
 	hud.hide()
 
-	NetworkTime.on_tick.connect(_tick)
+	NetworkTime.before_tick_loop.connect(_before_tick_loop)
 	NetworkTime.after_tick_loop.connect(_after_tick_loop)
 
 func setup_references(tm: TeamManager, rm: RoundManager):
 	team_manager = tm
 	round_manager = rm
 
-func _tick(dt: float, tick: int):
-	# Use death_tick (replicated) instead of is_dead (not rollback-safe)
-	if death_tick >= 0:
-		return
-
-	if health <= 0:
-		$DieSFX.play()
-		deaths += 1
-		_die()
+func _before_tick_loop():
+	_ackd_deaths = deaths
+	_needs_teleport = false
 
 func _after_tick_loop():
-	if did_respawn:
+	# Teleport if any respawn happened during this tick loop (catch-up safe)
+	if _needs_teleport:
 		tick_interpolator.teleport()
+
+	# Death detected during rollback loop
+	if deaths > _ackd_deaths:
+		tick_interpolator.teleport()
+		is_dead = true
+		$DieSFX.play()
+		_hide_player()
+		# Server: report kill and send immediate visual RPC to clients
+		if is_multiplayer_authority():
+			_logger.warning("%s died at tick %s", [name, death_tick])
+			if round_manager:
+				round_manager.report_kill(get_player_id(), -1, death_tick)
+			_sync_death.rpc(death_tick)
+		_ackd_deaths = deaths
+
+	if _was_hit:
+		$HitSFX.play()
+		_was_hit = false
 
 func _rollback_tick(delta: float, tick: int, is_fresh: bool) -> void:
 	# Handle round respawn teleport inside rollback for proper integration
@@ -55,16 +73,21 @@ func _rollback_tick(delta: float, tick: int, is_fresh: bool) -> void:
 		global_position = respawn_position
 		velocity = Vector3.ZERO
 		did_respawn = true
+		_needs_teleport = true  # Accumulates across loop, survives catch-up
 	else:
 		did_respawn = false
 
-	# Use death_tick (replicated via MultiplayerSynchronizer) for rollback-safe
-	# dead check. During resimulation, tick < death_tick = alive, tick >= death_tick = dead.
+	# Dead check: skip processing for dead player (deterministic, rollback-safe)
 	if death_tick >= 0 and tick >= death_tick:
 		return
 
-	# Use freeze_end_tick for rollback-safe freeze detection.
-	# freeze_end_tick is fixed once set, so tick < freeze_end_tick is deterministic during resimulation.
+	# Death detection inside rollback — same tick as damage, no one-frame delay
+	if health <= 0:
+		death_tick = tick
+		deaths += 1
+		return
+
+	# Freeze detection (tick-based, deterministic during resimulation)
 	var is_frozen := round_manager != null and round_manager.freeze_end_tick >= 0 and tick < round_manager.freeze_end_tick
 
 	# Handle look (always allowed, even during freeze)
@@ -113,10 +136,10 @@ func _force_update_is_on_floor():
 	move_and_slide()
 	velocity = old_velocity
 
-func damage():
-	$HitSFX.play()
-	if is_multiplayer_authority():
-		health -= 34
+func damage(amount: int = 34, is_new_hit: bool = true):
+	health -= amount
+	if is_new_hit:
+		_was_hit = true
 		_logger.warning("%s HP now at %s", [name, health])
 
 func can_act() -> bool:
@@ -135,21 +158,7 @@ func set_spectator():
 	is_dead = true
 	death_tick = NetworkTime.tick
 	_hide_player()
-	_sync_death.rpc()
-
-func _die():
-	if not is_multiplayer_authority():
-		return
-
-	_logger.warning("%s died", [name])
-	is_dead = true
-	death_tick = NetworkTime.tick
-
-	# Report kill to round manager (tick-based, not frame-state-based)
-	if round_manager:
-		round_manager.report_kill(get_player_id(), -1)
-
-	_sync_death.rpc()
+	_sync_spectator.rpc(death_tick)
 
 func round_respawn(spawn_pos: Vector3):
 	# Called by spawner at round start (server only)
@@ -188,19 +197,31 @@ func _show_player():
 func get_player_id() -> int:
 	return input.get_multiplayer_authority()
 
+# --- RPCs ---
+# _sync_death is cosmetic: fast visual feedback for remote clients.
+# Gameplay gating uses death_tick/deaths (rollback state via RollbackSynchronizer).
 @rpc("authority", "call_local", "reliable")
-func _sync_death() -> void:
+func _sync_death(server_death_tick: int) -> void:
 	is_dead = true
+	death_tick = server_death_tick
+	_hide_player()
+
+@rpc("authority", "call_local", "reliable")
+func _sync_spectator(server_death_tick: int) -> void:
+	is_dead = true
+	death_tick = server_death_tick
 	_hide_player()
 
 @rpc("authority", "call_local", "reliable")
 func _sync_round_respawn(spawn_pos: Vector3, _respawn_tick: int) -> void:
 	is_dead = false
 	health = 100
+	deaths = 0
 	death_tick = -1
 	respawn_position = spawn_pos
 	respawn_tick = _respawn_tick
 	global_position = spawn_pos
 	velocity = Vector3.ZERO
 	did_respawn = true
+	_ackd_deaths = 0
 	_show_player()
