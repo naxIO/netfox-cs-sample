@@ -1,242 +1,92 @@
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="./docs/assets/press-kit/netfox-banner-hor.svg.preview.png">
-  <source media="(prefers-color-scheme: light)" srcset="./docs/assets/press-kit/netfox-banner-hor-alt.svg.preview.png">
-  <img alt="netfox banner" src="./docs/assets/press-kit/netfox-banner-hor-alt.svg.preview.png">
-</picture>
+# netfox CS Sample
 
-[![License](https://img.shields.io/github/license/foxssake/netfox)](https://github.com/foxssake/netfox/blob/main/LICENSE)
-[![GitHub Release](https://img.shields.io/github/v/release/foxssake/netfox)](https://github.com/foxssake/netfox/releases)
-[![Documentation](https://img.shields.io/badge/Docs-github.io-blue)](https://foxssake.github.io/netfox/)
-[![Netfox Sharp](https://img.shields.io/badge/View-Netfox_Sharp-orange)](https://github.com/CyFurStudios/NetfoxSharp)
-[![Discord](https://img.shields.io/discord/1253434107656933447?logo=discord&label=Discord)](https://discord.gg/xWGh4GskG5)
-[![ko-fi](https://img.shields.io/badge/Support%20on-ko--fi-ff5e5b?logo=ko-fi)](https://ko-fi.com/T6T8WZD0W)
+A **Counter-Strike 1.6 inspired** multiplayer FPS built with [Godot 4.6](https://godotengine.org/) and the [netfox](https://github.com/foxssake/netfox) networking framework.
 
-A set of addons for responsive online games with the [Godot engine].
+This is a community sample showcasing how to build a server-authoritative FPS with rollback netcode, client-side prediction, and latency compensation using netfox's `RollbackSynchronizer`, `RewindableAction`, and related systems.
+
+> **Note:** This is a fork of the [netfox repository](https://github.com/foxssake/netfox). The game lives in `examples/multiplayer-fps/`.
 
 ## Features
 
-* ⏲️  Consistent timing across multiple machines
-* 🖥️ Supports client-server architecture
-* 🧈 Smooth motion with easy-to-use interpolation
-* 💨 Lag compensation with Client-side Prediction and Server-side Reconciliation
-* 🛜 Bullet-proof connectivity with [noray] integration
+- **Teams & Rounds** — Terrorists vs Counter-Terrorists with freeze-time, round timer, and win conditions
+- **6 Weapons** — Knife, Glock, USP, AK-47, M4A1, AWP with per-weapon damage, fire rate, recoil, ammo, and reload
+- **Economy System** — Kill/round rewards, loss streak bonus, buy menu (B-key), Kevlar & defuse kit
+- **Bomb Plant/Defuse** — 2 bombsites, server-authoritative bomb logic, carrier tracking, drop on death
+- **Grenades** — Flashbang (LOS + distance whiteout) and Smoke grenades
+- **Rollback Netcode** — Server-authoritative with client-side prediction at 64 tick
+- **Latency-Compensated Weapons** — `RewindableAction`-based hitscan firing inside the rollback loop
+- **Frame-Rate Camera** — Mouse look renders at display refresh rate, not tick rate
 
-## Overview
+## How to Run
 
-The package consists of multiple addons, each with different features:
+1. Clone this repo
+2. Open the project root in **Godot 4.6**
+3. Run the main scene (`examples/multiplayer-fps/multiplayer-fps.tscn`)
+4. Use the network popup to host/join a game
 
-* [netfox]
-  * The core package, implements timing, rollback and other multiplayer
-    features
-  * *Start here*
-* [netfox.noray]
-  * Implements [noray] integration to establish connection between players
-  * *Useful for online games*
-* [netfox.extras]
-  * Provides high-level, game-specific, convenience features built on top of
-    netfox, like base classes for input management or weapons
-  * *Check for reusable components for your game*
-* [netfox.internals]
-  * Shared utilities for the other addons
-  * Included as dependency, no need to install separately
+For multiple local clients, enable **auto-tile windows** in the netfox settings (already on by default).
 
-## C# Support
-For experimental C# support, see the [Netfox Sharp repo], and the corresponding
-[Netfox Sharp guide].
+## Controls
 
-## Install
+| Key | Action |
+|---|---|
+| WASD | Move |
+| Mouse | Look |
+| Left Click | Fire |
+| R | Reload |
+| 1-4 | Weapon slots |
+| Scroll | Next/prev weapon |
+| B | Buy menu |
+| E | Use (plant/defuse bomb) |
+| Tab | Scoreboard |
+| Esc | Release mouse |
 
-### Releases
+## Project Structure
 
-Find the latest netfox under
-[Releases](https://github.com/foxssake/netfox/releases)
+```
+examples/multiplayer-fps/
+├── multiplayer-fps.tscn          # Main scene (map, spawns, UI, network)
+├── characters/player.tscn        # Player prefab (CharacterBody3D)
+├── scripts/
+│   ├── player.gd                 # Movement, health, respawn
+│   ├── player-input.gd           # Input gathering (BaseNetInput)
+│   ├── weapon_manager.gd         # Weapon switching, ammo, models
+│   ├── round-manager.gd          # Round state machine, win conditions
+│   ├── team-manager.gd           # Team assignment (T/CT)
+│   ├── economy_manager.gd        # Money, buy logic, rewards
+│   ├── bomb.gd                   # Bomb plant/defuse/explode
+│   ├── bombsite.gd               # Bombsite area detection
+│   ├── grenade.gd                # Flash & smoke grenades
+│   ├── bullethole.gd             # Decal pool
+│   ├── data/weapon_data.gd       # Weapon stats resource
+│   ├── data/weapon_registry.gd   # Weapon ID → resource mapping
+│   └── ui/                       # HUD, buy menu, bomb HUD, crosshair
+addons/
+├── netfox/                       # Core: timing, rollback, synchronizers
+├── netfox.extras/                # Weapons, input, state machines
+├── netfox.internals/             # Internal utilities
+└── netfox.noray/                 # NAT punchthrough & relay
+```
 
-Each release contains the addons, and a build of [Forest Brawl] for Windows and
-Linux. Each addon has its dependencies packed with it - e.g.
-*"netfox.extras.vx.y.z.zip"* also contains both *netfox* and
-*netfox.internals*.
+## Netfox Patterns Used
 
-> Note: For releases before v1.1.1, a separate *".with-deps.zip"* version
-> contains the addon and its dependencies, while the regular zips contain only
-> the addon itself.
-
-### Asset Library
-
-Search for the addon name in Godot's AssetLib or download from the site:
-
-* [netfox](https://godotengine.org/asset-library/asset/2375)
-* [netfox.noray](https://godotengine.org/asset-library/asset/2376)
-* [netfox.extras](https://godotengine.org/asset-library/asset/2377)
-
-### Source
-
-Download the [source] and copy the addons of your choice to your Godot project.
-
-### Enable the addons
-
-After adding *netfox* to your project, make sure to enable the addons in your
-project settings. Otherwise, Godot will present you with errors about
-undeclared identifiers.
-
-## Upgrading
-
-If you're upgrading from an older version of netfox, refer to the [upgrade
-guide](docs/upgrading.md).
-
-## Usage
-
-See the [docs](https://foxssake.github.io/netfox/).
-
-### Supported versions
-
-Godot 4.x is supported by netfox. If you find any issue using any supported
-version, please [open an issue].
-
-Forest Brawl and the other examples are written against Godot 4.1. They may or
-may not work when opened with any other version.
-
-### Prototyping
-
-To try your game online with [noray], a free to use instance is hosted at
-`tomfol.io:8890`, the same instance used by [Forest Brawl].
-
-You can use this [noray] instance to quickly test your games online, but is not
-recommended for shipping games. The instance has configured limits, and no
-uptime guarantees are made.
-
-### Examples
-
-#### Comparison sample
-
-* [Single player](examples/single-player)
-* [Simple example](examples/multiplayer-simple)
-* [Example with netfox](examples/multiplayer-netfox)
-
-To provide a short intro on how to get started with netfox, and how it fares
-compared to built-in multiplayer tools, a simple demo was implemented as a
-single-player game, which was ported to multiplayer using both a naive approach
-and netfox.
-
-#### Feature examples
-
-Each of these examples give a starting point to a specific feature:
-
-* [Input gathering](examples/input-gathering)
-* [State machines](examples/multiplayer-state-machine)
-* [Multiplayer FPS](examples/multiplayer-fps)
-* [Rollback Debugger](examples/rollback-debugger)
-* [Property Configuration](examples/property-configuration)
-* [Input prediction](examples/input-prediction)
-* [NPCs with rollback](examples/rollback-npc)
-* [NPCs with StateSynchronizer](examples/state-synchronizer-npc)
-* [Visibility filtering](examples/visibility-filtering)
-
-#### Example games
-
-##### Forest Brawl
-
-To provide examples of netfox usage in an actual game, [Forest Brawl] was
-created and included specifically for this purpose.
-
-It's a party game where an arbitrary amount of players compete by trying to
-knock eachother off of the map.
-
-##### Godot Rocket League
-
-Play soccer with cars, in Godot, with [Godot Rocket League](https://github.com/albertok/godot-rocket-league)!
-
-Demonstrates *netfox*'s physics rollback capabilities, ensuring smooth and
-responsive physics-based gameplay.
-
-## Built with netfox
-
-Games built with netfox, coming to a Steam near you! See the more on the site's
-[Made with netfox](https://foxssake.github.io/netfox/latest/made-with-netfox/)
-page!
-
-<a href="https://store.steampowered.com/app/3180520/Bubble_Battle/">
-
-![Bubble Battle](docs/assets/showcase/bubble-battle.jpg)
-
-</a>
-
-<a href="https://store.steampowered.com/app/3423700/PL4noB/">
-
-![PL4no-B](docs/assets/showcase/pl4nob.jpg)
-
-</a>
-
-<a href="https://store.steampowered.com/app/3204000/Chrome_Carnage/">
-
-![Chrome Carnage](docs/assets/showcase/chrome-carnage.jpg)
-
-</a>
-
-<a href="https://store.steampowered.com/app/3952070/Nitro_Turtles/">
-
-![Nitro Turtles](docs/assets/showcase/nitro-turtles.jpg)
-
-</a>
-
-Building something cool with netfox? Whether it's released or in progress, feel
-free to open a PR, adding your game to the list!
+- **`RollbackSynchronizer`** with `_rollback_tick()` for deterministic state sync
+- **`RewindableAction`** for rollback-safe weapon firing
+- **`TickInterpolator`** for smooth visuals between ticks
+- **`BaseNetInput`** for input gathering with `_gather()`
+- **`NetworkEvents`** for peer join/leave handling
+- **`MultiplayerSynchronizer`** for non-rollback state (health, death, economy)
+- **Self-RPC pattern** — direct-call for listen-server host, RPC for clients
 
 ## License
 
-netfox is under the [MIT license](LICENSE).
+MIT — see [LICENSE](LICENSE).
 
-Note that the repository contains assets made by other people as well. For
-these cases, the relevant licenses can be found in the assets' directories.
+Built on top of [netfox](https://github.com/foxssake/netfox) by [Fox's Sake Studio](https://foxssake.studio/).
 
-## Issues
+## Credits
 
-In case of any issues, comments, or questions, please feel free to [open an issue]!
-
-## Contribution
-
-Contributions are welcome! Please feel free to fork the repository and open a
-PR. Ideally, your PR implements a single thing, optionally refers to an
-existing issue, and follows the [GDScript style guide].
-
-Please note that depending on the feature/fix you implement, the PR may need to
-undergo changes, or in some cases, get rejected if it doesn't fit netfox's
-intended feature set or vision.
-
-If you feel like it, grant the netfox author(s) write permission to your fork,
-so we can update the PR if needed.
-
-If you're not sure if the PR would fit netfox or not, [open an issue] first,
-mentioning that you'd be willing to contribute a PR.
-
-Author(s) at the time of writing:
-
-* @elementbound
-
-## Funding
-
-If you've found netfox useful, feel free to fund us on ko-fi:
-
-[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/T6T8WZD0W)
-
-Donations are always appreciated and taken as gratitude for the work that has
-already been done.
-
-If you'd like to fund a specific feature or development, please contact us in [email].
-
-[Netfox Sharp repo]: https://github.com/CyFurStudios/NetfoxSharp
-[Netfox Sharp guide]: https://foxssake.github.io/netfox/latest/netfox/guides/netfox-sharp/
-
-[source]: https://github.com/foxssake/netfox/archive/refs/heads/main.zip
-[Godot engine]: https://godotengine.org/
-[noray]: https://github.com/foxssake/noray
-
-[netfox]: addons/netfox
-[netfox.noray]: addons/netfox.noray
-[netfox.extras]: addons/netfox.extras
-[netfox.internals]: addons/netfox.internals
-[Forest Brawl]: examples/forest-brawl
-
-[open an issue]: https://github.com/foxssake/netfox/issues
-[GDScript style guide]: https://docs.godotengine.org/en/stable/tutorials/scripting/gdscript/gdscript_styleguide.html
-
-[email]: mailto:foxssake@gmail.com?subject=netfox
+- [netfox](https://github.com/foxssake/netfox) — Networking framework by Tamás Gálffy / Fox's Sake
+- Sound effects from [Sonniss GDC Bundle](https://sonniss.com/)
+- Bullet hole texture by [musdasch](https://opengameart.org/users/musdasch) (CC0)
+- Crosshair by [krazyjakee](https://github.com/krazyjakee) (CC0)
