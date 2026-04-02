@@ -11,7 +11,6 @@ This is a community sample showcasing how to build a server-authoritative FPS wi
 - **Teams & Rounds** — Terrorists vs Counter-Terrorists with freeze-time, round timer, and win conditions
 - **6 Weapons** — Knife, Glock, USP, AK-47, M4A1, AWP with per-weapon damage, fire rate, recoil, ammo, and reload
 - **Economy System** — Kill/round rewards, loss streak bonus, buy menu (B-key), Kevlar & defuse kit
-- **Bomb Plant/Defuse** — 2 bombsites, server-authoritative bomb logic, carrier tracking, drop on death
 - **Grenades** — Flashbang (LOS + distance whiteout) and Smoke grenades
 - **Rollback Netcode** — Server-authoritative with client-side prediction at 64 tick
 - **Latency-Compensated Weapons** — `RewindableAction`-based hitscan firing inside the rollback loop
@@ -37,7 +36,6 @@ For multiple local clients, enable **auto-tile windows** in the netfox settings 
 | 1-4 | Weapon slots |
 | Scroll | Next/prev weapon |
 | B | Buy menu |
-| E | Use (plant/defuse bomb) |
 | Tab | Scoreboard |
 | Esc | Release mouse |
 
@@ -54,13 +52,11 @@ examples/multiplayer-fps/
 │   ├── round-manager.gd          # Round state machine, win conditions
 │   ├── team-manager.gd           # Team assignment (T/CT)
 │   ├── economy_manager.gd        # Money, buy logic, rewards
-│   ├── bomb.gd                   # Bomb plant/defuse/explode
-│   ├── bombsite.gd               # Bombsite area detection
 │   ├── grenade.gd                # Flash & smoke grenades
 │   ├── bullethole.gd             # Decal pool
 │   ├── data/weapon_data.gd       # Weapon stats resource
 │   ├── data/weapon_registry.gd   # Weapon ID → resource mapping
-│   └── ui/                       # HUD, buy menu, bomb HUD, crosshair
+│   └── ui/                       # HUD, buy menu, crosshair
 addons/
 ├── netfox/                       # Core: timing, rollback, synchronizers
 ├── netfox.extras/                # Weapons, input, state machines
